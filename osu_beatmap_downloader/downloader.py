@@ -94,6 +94,7 @@ class BeatmapSet:
         self.set_id = data["id"]
         self.title = data["title"]
         self.artist = data["artist"]
+        self.beatmaps = data["beatmaps"]
         self.url = f"https://osu.ppy.sh/beatmapsets/{self.set_id}"
 
     def __str__(self):
@@ -102,7 +103,7 @@ class BeatmapSet:
 
 
 class Downloader:
-    def __init__(self, limit, no_video):
+    def __init__(self, limit, no_video, filter = []):
         self.beatmapsets = set()
         self.limit = limit
         self.no_video = no_video
@@ -111,12 +112,11 @@ class Downloader:
         self.session = requests.Session()
         self.login()
         self.scrape_beatmapsets()
+        self.filter_beatmapsets(filter)
         self.remove_existing_beatmapsets()
 
     def get_token(self):
-        # access the osu! homepage
         homepage = self.session.get(OSU_URL)
-        # extract the CSRF token sitting in one of the <meta> tags
         regex = re.compile(r".*?csrf-token.*?content=\"(.*?)\">", re.DOTALL)
         match = regex.match(homepage.text)
         csrf_token = match.group(1)
@@ -151,6 +151,39 @@ class Downloader:
             fav_count = data["beatmapsets"][-1]["favourite_count"]
             num_beatmapsets = len(self.beatmapsets)
         logger.success(f"Scraped {num_beatmapsets} beatmapsets")
+
+    def filter_beatmapsets(self, conditions):
+        def check_conditions_for_beatmaps(beatmaps):
+            for beatmap in beatmaps:
+                if check_conditions(beatmap):
+                    return True
+            return False
+
+        def check_conditions(beatmap):
+            for condition in conditions:
+                attribute, operator, value = condition
+                try:
+                    attr_value = str(beatmap[attribute])
+                except:
+                    raise Exception(f"Invalid argument '{attribute}' passed to filters list")
+                if attr_value is None:
+                    return False
+
+                if operator == '=' and not attr_value == value:
+                    return False
+                elif operator == '>' and not attr_value > value:
+                    return False
+                elif operator == '<' and not attr_value < value:
+                    return False
+            return True
+
+        filtered_set = set()
+
+        for beatmapset in self.beatmapsets:
+            if check_conditions_for_beatmaps(beatmapset.beatmaps):
+                filtered_set.add(beatmapset)
+
+        self.beatmapsets = filtered_set
 
     def remove_existing_beatmapsets(self):
         filtered_set = set()
@@ -204,6 +237,20 @@ class Downloader:
                     sys.exit()
         logger.info(" DOWNLOADER FINISHED ".center(50, "#") + "\n")
 
+def parse_filter(value):
+    conditions = value.split(',')
+    parsed_conditions = []
+
+    for condition in conditions:
+        for operator in ['=', '>', '<']:
+            if operator in condition:
+                attribute, value = condition.split(operator, 1)
+                parsed_conditions.append([attribute, operator, value])
+                break
+        else:
+            raise argparse.ArgumentTypeError("Invalid filter format. Use 'attribute=value', 'attribute>value', or 'attribute<value'")
+
+    return parsed_conditions
 
 def main():
     parser = argparse.ArgumentParser("osu-beatmap-downloader")
@@ -225,6 +272,12 @@ def main():
         help="Downloads beatmaps without video files",
         action="store_true",
     )
+    parser_downloader.add_argument(
+        "-f",
+        "--filter",
+        type=parse_filter,
+        help="Filter conditions in the format attribute>value or attribute<value",
+    )
 
     parser_credentials = subparsers.add_parser(
         "credentials", help="Manage your login credentials"
@@ -239,7 +292,8 @@ def main():
 
     args = parser.parse_args()
     if args.command == "download":
-        loader = Downloader(args.limit, args.no_video)
+        loader = Downloader(args.limit, args.no_video,args.filter)
+        print("Loaded ",str(len(loader.beatmapsets))," mapsets")
         loader.run()
     elif args.command == "credentials":
         if args.check:
@@ -253,7 +307,6 @@ def main():
                 print("Credential file successfully deleted")
             except FileNotFoundError:
                 print("There is no credential file to delete")
-
 
 if __name__ == "__main__":
     main()
