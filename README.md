@@ -12,13 +12,13 @@ Downloads given number of beatmapsets with the most favorites from [osu.ppy.sh](
 
 You can install this program via `pip`:
 ```
-pip install osu-beatmap-downloader
+pip install osu-beatmap-downloader@git+https://github.com/kskarthik5/osudl
 ```
 This will install the program in the global python package folder inside your python installation directory.
 
 You can also install it into your python `user` directory with:
 ```
-pip install --user osu-beatmap-downloader
+pip install --user osu-beatmap-downloader@git+https://github.com/kskarthik5/osudl
 ```
 
 These directories might not be in PATH. If you want to use this program from the command line, you may have to add the correct directories to PATH.
