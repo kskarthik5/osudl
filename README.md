@@ -1,7 +1,7 @@
-Low effort patch to add filters for downloading beatmapsets. Includes filtering general beatmap attributes like 'difficulty_rating', 'mode', 'ar', .etc. Example -
+Low effort patch to add filters for downloading beatmapsets. Includes filtering general beatmap attributes like 'star', 'mode', 'ar', .etc. Example -
 
 ```
-osu-beatmap-downloader download --filter 'difficulty_rating>1,difficulty_rating<3,mode=mania' --no-video
+osu-beatmap-downloader download --filter 'star>3 ar>4 mode=mania' --no-video
 ```
 
 # Osu! Beatmapset Downloader

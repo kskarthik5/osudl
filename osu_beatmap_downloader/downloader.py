@@ -103,7 +103,7 @@ class BeatmapSet:
 
 
 class Downloader:
-    def __init__(self, limit, no_video, filter = []):
+    def __init__(self, limit, no_video, query = "", mode=None, include_graveyard=False):
         self.beatmapsets = set()
         self.limit = limit
         self.no_video = no_video
@@ -111,8 +111,8 @@ class Downloader:
         self.cred_helper.load_credentials()
         self.session = requests.Session()
         self.login()
-        self.scrape_beatmapsets()
-        self.filter_beatmapsets(filter)
+        print(query)
+        self.scrape_beatmapsets(query,mode,include_graveyard)
         self.remove_existing_beatmapsets()
 
     def get_token(self):
@@ -133,57 +133,32 @@ class Downloader:
             sys.exit(1)
         logger.success("Login succesfull")
 
-    def scrape_beatmapsets(self):
+    def scrape_beatmapsets(self,query,mode, include_graveyard):
         fav_count = sys.maxsize
         num_beatmapsets = 0
         logger.info("Scraping beatmapsets")
-        while num_beatmapsets < self.limit:
-            cursor_string_json = json.dumps({"favourite_count": fav_count,"id": 0})
-            params = {
-                "sort": "favourites_desc",
-                "cursor_string": base64.b64encode(cursor_string_json.encode())
-            }
-            response = self.session.get(OSU_SEARCH_URL, params=params)
-            data = response.json()
-            self.beatmapsets.update(
-                (BeatmapSet(bmset) for bmset in data["beatmapsets"])
-            )
-            fav_count = data["beatmapsets"][-1]["favourite_count"]
-            num_beatmapsets = len(self.beatmapsets)
+        try:
+            while num_beatmapsets < self.limit or self.limit == 0:
+                cursor_string_json = json.dumps({"favourite_count": fav_count,"id": 0})
+                params = {
+                    "sort": "favourites_desc",
+                    "q":query,
+                    "cursor_string": base64.b64encode(cursor_string_json.encode()),
+                }
+                if(mode):
+                   params["m"]=mode
+                if(include_graveyard):
+                   params["s"]="any"
+                response = self.session.get(OSU_SEARCH_URL, params=params)
+                data = response.json()
+                self.beatmapsets.update(
+                    (BeatmapSet(bmset) for bmset in data["beatmapsets"])
+                )
+                fav_count = data["beatmapsets"][-1]["favourite_count"]
+                num_beatmapsets = len(self.beatmapsets)
+        except:
+            logger.success(f"Scraped {num_beatmapsets} beatmapsets")
         logger.success(f"Scraped {num_beatmapsets} beatmapsets")
-
-    def filter_beatmapsets(self, conditions):
-        def check_conditions_for_beatmaps(beatmaps):
-            for beatmap in beatmaps:
-                if check_conditions(beatmap):
-                    return True
-            return False
-
-        def check_conditions(beatmap):
-            for condition in conditions:
-                attribute, operator, value = condition
-                try:
-                    attr_value = str(beatmap[attribute])
-                except:
-                    raise Exception(f"Invalid argument '{attribute}' passed to filters list")
-                if attr_value is None:
-                    return False
-
-                if operator == '=' and not attr_value == value:
-                    return False
-                elif operator == '>' and not attr_value > value:
-                    return False
-                elif operator == '<' and not attr_value < value:
-                    return False
-            return True
-
-        filtered_set = set()
-
-        for beatmapset in self.beatmapsets:
-            if check_conditions_for_beatmaps(beatmapset.beatmaps):
-                filtered_set.add(beatmapset)
-
-        self.beatmapsets = filtered_set
 
     def remove_existing_beatmapsets(self):
         filtered_set = set()
@@ -237,21 +212,6 @@ class Downloader:
                     sys.exit()
         logger.info(" DOWNLOADER FINISHED ".center(50, "#") + "\n")
 
-def parse_filter(value):
-    conditions = value.split(',')
-    parsed_conditions = []
-
-    for condition in conditions:
-        for operator in ['=', '>', '<']:
-            if operator in condition:
-                attribute, value = condition.split(operator, 1)
-                parsed_conditions.append([attribute, operator, value])
-                break
-        else:
-            raise argparse.ArgumentTypeError("Invalid filter format. Use 'attribute=value', 'attribute>value', or 'attribute<value'")
-
-    return parsed_conditions
-
 def main():
     parser = argparse.ArgumentParser("osu-beatmap-downloader")
     subparsers = parser.add_subparsers(dest="command", help="Choose a subcommand")
@@ -273,12 +233,21 @@ def main():
         action="store_true",
     )
     parser_downloader.add_argument(
-        "-f",
-        "--filter",
-        type=parse_filter,
-        help="Filter conditions in the format attribute>value or attribute<value",
+        "-gr",
+        "--include-graveyard",
+        help="Inclued graveyarded maps",
+        action="store_true",
     )
-
+    parser_downloader.add_argument(
+        "-q",
+        "--query",
+        help="add queries to the search",
+    )
+    parser_downloader.add_argument(
+        "-m",
+        "--mode",
+        help="Select game mode of beatmaps (0=standard,1=taiko,2=catch,3=mania)",
+    )
     parser_credentials = subparsers.add_parser(
         "credentials", help="Manage your login credentials"
     )
@@ -292,9 +261,9 @@ def main():
 
     args = parser.parse_args()
     if args.command == "download":
-        loader = Downloader(args.limit, args.no_video,args.filter)
+        loader = Downloader(args.limit, args.no_video,args.query,args.mode,args.include_graveyard)
         print("Loaded ",str(len(loader.beatmapsets))," mapsets")
-        loader.run()
+        loader.run()  
     elif args.command == "credentials":
         if args.check:
             if os.path.exists(CREDS_FILEPATH):
