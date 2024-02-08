@@ -166,7 +166,7 @@ class Downloader:
             dir_path = os.path.join(DOWNLOAD_PATH, str(beatmapset))
             file_path = dir_path + ".osz"
             if os.path.isdir(dir_path) or os.path.isfile(file_path):
-                logger.info(f"Beatmapset already downloaded: {beatmapset}")
+#                logger.info(f"Beatmapset already downloaded: {beatmapset}")
                 continue
             filtered_set.add(beatmapset)
         self.beatmapsets = filtered_set
